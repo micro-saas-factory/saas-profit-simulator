@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Micro SaaS 損益分岐点 & 収益シミュレーター</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --border: #334155;
+      --success: #4ade80;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 20px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 30px; }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; color: var(--accent); }
+    p.subtitle { color: var(--muted); font-size: 0.95rem; }
+    
+    .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    @media (min-width: 768px) {
+      .grid { grid-template-columns: 320px 1fr; }
+    }
+    
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    
+    .result-box {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric {
+      background: #0f172a;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+    .metric-title { font-size: 0.75rem; color: var(--muted); }
+    .metric-value { font-size: 1.2rem; font-weight: bold; color: var(--success); margin-top: 4px; }
+    
+    .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
+    
+    .share-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 12px;
+      background: #1d9bf0;
+      color: white;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 15px;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .share-btn:hover { background: #1a8cd8; }
+    footer { text-align: center; margin-top: 40px; font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🚀 Micro SaaS 収益シミュレーター</h1>
+    <p class="subtitle">100%ローカル計算 / 損益分岐点と1年後の見込み収益をリアルタイム算出</p>
+  </header>
+
+  <div class="grid">
+    <!-- 入力エリア -->
+    <div class="card">
+      <h2 style="font-size: 1.1rem; margin-bottom: 16px;">⚙️ パラメーター設定</h2>
+      
+      <div class="form-group">
+        <label>ビジネスモデル</label>
+        <select id="modelType" onchange="calculate()">
+          <option value="subscription">月額サブスク (SaaS)</option>
+          <option value="oneTime">単発買い切り (App)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>販売価格 (円)</label>
+        <input type="number" id="price" value="980" step="100" oninput="calculate()">
+      </div>
+
+      <div class="form-group">
+        <label>初期開発コスト (円)</label>
+        <input type="number" id="initialCost" value="0" step="1000" oninput="calculate()">
+      </div>
+
+      <div class="form-group">
+        <label>月額固定費 (サーバー/API等) (円)</label>
+        <input type="number" id="monthlyCost" value="0" step="500" oninput="calculate()">
+      </div>
+
+      <div class="form-group">
+        <label>初月の獲得ユーザー数 (人)</label>
+        <input type="number" id="initialUsers" value="10" step="1" oninput="calculate()">
+      </div>
+
+      <div class="form-group" id="growthGroup">
+        <label>月間ユーザー成長率 (%)</label>
+        <input type="number" id="growthRate" value="15" step="1" oninput="calculate()">
+      </div>
+
+      <div class="form-group" id="churnGroup">
+        <label>月間解約率 (%)</label>
+        <input type="number" id="churnRate" value="5" step="0.5" oninput="calculate()">
+      </div>
+    </div>
+
+    <!-- 結果・グラフ表示エリア -->
+    <div>
+      <div class="card" style="margin-bottom: 20px;">
+        <h2 style="font-size: 1.1rem; margin-bottom: 16px;">📊 12ヶ月目の予測結果</h2>
+        <div class="result-box">
+          <div class="metric">
+            <div class="metric-title">黒字化ライン</div>
+            <div class="metric-value" id="breakEvenUsers">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-title">12ヶ月目の有料会員</div>
+            <div class="metric-value" id="finalUsers">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-title">12ヶ月目の月商</div>
+            <div class="metric-value" id="finalMrr">-</div>
+          </div>
+          <div class="metric">
+            <div class="metric-title">1年間累計利益</div>
+            <div class="metric-value" id="annualProfit">-</div>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <canvas id="revenueChart"></canvas>
+        </div>
+
+        <a id="shareBtn" href="#" target="_blank" class="share-btn">
+          𝕏 (Twitter) でシミュレーション結果をシェアする
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>100% Local Processing / Privacy First Tool</p>
+  </footer>
+</div>
+
+<script>
+  let chart = null;
+
+  function calculate() {
+    const modelType = document.getElementById('modelType').value;
+    const price = parseFloat(document.getElementById('price').value) || 0;
+    const initialCost = parseFloat(document.getElementById('initialCost').value) || 0;
+    const monthlyCost = parseFloat(document.getElementById('monthlyCost').value) || 0;
+    const initialUsers = parseFloat(document.getElementById('initialUsers').value) || 0;
+    const growthRate = (parseFloat(document.getElementById('growthRate').value) || 0) / 100;
+    const churnRate = (parseFloat(document.getElementById('churnRate').value) || 0) / 100;
+
+    // 表示切り替え
+    if (modelType === 'oneTime') {
+      document.getElementById('growthGroup').style.display = 'none';
+      document.getElementById('churnGroup').style.display = 'none';
+    } else {
+      document.getElementById('growthGroup').style.display = 'block';
+      document.getElementById('churnGroup').style.display = 'block';
+    }
+
+    // 損益分岐ユーザー数
+    let breakEvenText = "0人";
+    if (price > 0) {
+      const requiredUsers = Math.ceil(monthlyCost / price);
+      breakEvenText = `${requiredUsers} 人/月`;
+    }
+    document.getElementById('breakEvenUsers').innerText = breakEvenText;
+
+    // 12ヶ月推移計算
+    let labels = [];
+    let monthlyProfits = [];
+    let cumulativeProfits = [];
+    let currentUsers = initialUsers;
+    let totalCostAccumulated = initialCost;
+    let totalRevenueAccumulated = 0;
+
+    for (let month = 1; month <= 12; month++) {
+      labels.push(`${month}月目`);
+      
+      let revenue = 0;
+      if (modelType === 'subscription') {
+        if (month > 1) {
+          const newUsers = currentUsers * growthRate;
+          const lostUsers = currentUsers * churnRate;
+          currentUsers = Math.max(0, currentUsers + newUsers - lostUsers);
+        }
+        revenue = Math.round(currentUsers) * price;
+      } else {
+        // 単発
+        revenue = Math.round(currentUsers) * price;
+        currentUsers = currentUsers * (1 + growthRate); // 来月の購入想定数
+      }
+
+      totalRevenueAccumulated += revenue;
+      totalCostAccumulated += monthlyCost;
+      
+      const netProfit = totalRevenueAccumulated - totalCostAccumulated;
+      cumulativeProfits.push(netProfit);
+      monthlyProfits.push(revenue - monthlyCost);
+    }
+
+    // カード指標更新
+    const lastMonthRevenue = monthlyProfits[11] + monthlyCost;
+    document.getElementById('finalUsers').innerText = `${Math.round(currentUsers)} 人`;
+    document.getElementById('finalMrr').innerText = `¥${lastMonthRevenue.toLocaleString()}`;
+    
+    const finalProfit = cumulativeProfits[11];
+    const profitEl = document.getElementById('annualProfit');
+    profitEl.innerText = `¥${finalProfit.toLocaleString()}`;
+    profitEl.style.color = finalProfit >= 0 ? 'var(--success)' : '#ef4444';
+
+    // グラフ描画
+    renderChart(labels, cumulativeProfits);
+
+    // X シェアリンク更新
+    const shareText = encodeURIComponent(
+      `【Micro SaaS 収益シミュレーション結果】\n` +
+      `月額: ¥${price.toLocaleString()} | 12ヶ月目の月商想定: ¥${lastMonthRevenue.toLocaleString()}\n` +
+      `年間予想累計利益: ¥${finalProfit.toLocaleString()}\n\n` +
+      `完全無料で収益シミュレーションしてみよう！👇`
+    );
+    const shareUrl = encodeURIComponent(window.location.href);
+    document.getElementById('shareBtn').href = `https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`;
+  }
+
+  function renderChart(labels, data) {
+    const ctx = document.getElementById('revenueChart').getContext('2d');
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: '累計損益 (円)',
+          data: data,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.1)',
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#94a3b8' } }
+        },
+        scales: {
+          x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+          y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+        }
+      }
+    });
+  }
+
+  // 初期実行
+  calculate();
+</script>
+
+</body>
+</html>
